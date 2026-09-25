@@ -1,0 +1,44 @@
+:root{
+  --bg:#fff8ec;
+  --card:#ffffff;
+  --ink:#1c1b16;
+  --muted:#77736b;
+  --orange:#ff6b35;
+  --orange-dark:#b64216;
+  --green:#12402f;
+  --green-2:#1d6148;
+  --cream:#fff1df;
+  --cream-2:#fff1e9;
+  --line:#e7e2d9;
+  --red:#d93025;
+  --blue:#2563eb;
+  --shadow:0 10px 30px rgba(28,27,22,.07);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+a{color:var(--green);text-decoration:none}
+a:hover{text-decoration:underline}
+header{background:var(--green);color:#fff;padding:18px 28px;display:flex;justify-content:space-between;align-items:center;gap:18px;position:sticky;top:0;z-index:50;box-shadow:0 4px 18px rgba(18,64,47,.18)}
+header h1{margin:0;font-size:22px;line-height:1.2}header small{opacity:.82}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 24px 50px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;margin-bottom:20px;box-shadow:var(--shadow)}
+.hero{display:grid;grid-template-columns:1.35fr .65fr;gap:22px;align-items:stretch}
+.hero h1{font-size:48px;line-height:1.05;margin:0 0 12px}.accent{color:var(--orange)}
+.pill{display:inline-block;background:var(--cream-2);color:var(--orange-dark);border-radius:999px;padding:7px 12px;font-weight:800;font-size:12px;margin-bottom:14px}
+.company-panel{background:linear-gradient(135deg,var(--green),var(--green-2));color:#fff}.company-panel h2{margin-top:0}.company-panel a{color:#fff}
+.role-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.role-card{padding:18px;border:1px solid var(--line);border-radius:16px;background:#fff}.role-card a{display:block;color:var(--green);font-weight:800;margin-top:10px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.two{grid-template-columns:1fr 1fr}.three{grid-template-columns:repeat(3,1fr)}
+.stat{padding:18px;border-radius:16px;background:var(--cream)}.stat b{display:block;font-size:28px}.stat span{color:var(--muted);font-size:12px}
+label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:10px 0 5px}
+input,select,textarea{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:11px;background:#fffdf9;color:var(--ink);font:inherit;outline:none}input:focus,select:focus,textarea:focus{border-color:#d99a7e;box-shadow:0 0 0 3px rgba(255,107,53,.10)}textarea{min-height:90px;resize:vertical}
+.btn{display:inline-block;border:0;border-radius:11px;padding:11px 16px;font-weight:800;cursor:pointer;background:var(--orange);color:#fff;text-decoration:none}.btn:hover{text-decoration:none;filter:brightness(.96)}.btn.green{background:var(--green)}.btn.gray{background:#eee;color:#222}.btn.red{background:var(--red)}.btn.ghost,.ghost{background:transparent;color:inherit;border:1px solid rgba(255,255,255,.35)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.muted,.small{color:var(--muted)}.small{font-size:13px}
+.table{width:100%;border-collapse:collapse}.table th,.table td{padding:10px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}
+.badge{display:inline-block;padding:5px 9px;border-radius:99px;background:#fff1c9;font-size:11px;font-weight:800}.badge.picked_up{background:#dbe9ff}.badge.delivered{background:#d7f5df}.badge.unmatched{background:#ffd9de}.badge.matched{background:#fff1c9}
+.login{max-width:450px;margin:70px auto}.hidden{display:none!important}.error{color:var(--red)}.ok{color:#167a38}.msg{margin-top:12px}
+.qr{display:flex;gap:18px;align-items:center;background:var(--bg);padding:15px;border:1px dashed #e5bd7d;border-radius:14px}.code{font-size:28px;font-weight:800;letter-spacing:4px;color:var(--green)}
+.map{height:350px;border-radius:16px;overflow:hidden;background:#eee;border:1px solid var(--line)}.list{display:grid;gap:10px}.item{padding:14px;border:1px solid var(--line);border-radius:14px;background:#fff}.item strong{font-size:15px}
+.feature-note{background:var(--cream-2);border-radius:12px;padding:12px;color:#6e3b25;font-size:13px}
+@media(max-width:850px){.grid,.three{grid-template-columns:1fr 1fr}.hero{grid-template-columns:1fr}.role-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.grid,.three,.two,.role-grid{grid-template-columns:1fr}.wrap{padding:14px 12px 35px}header{padding:14px 16px}.hero h1{font-size:38px}}

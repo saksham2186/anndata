@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Donor | AnnData</title><link rel="stylesheet" href="/site_shared.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script></head>
+<body><header><div><h1>🍱 Donor Website</h1><small>Choose food, donate it and track the pickup live</small></div><div id="who"></div></header>
+<div class="wrap">
+<section id="login" class="card login">
+<h2>🔐 Donor Login</h2>
+<p class="muted">Login with your registered donor account to access your donation workspace.</p>
+<label>Email</label><input id="loginEmail" type="email" autocomplete="email" placeholder="you@example.com">
+<label>Password</label><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Your password">
+<button class="btn" onclick="loginDonor()">Login</button>
+<p id="loginMsg"></p>
+<p class="muted">Not registered yet? <a href="#" onclick="showRegistration();return false;">Create Donor Account</a></p>
+</section>
+
+<section id="register" class="card hidden">
+<h2>📝 Donor Registration</h2>
+<p class="muted">Create your donor account to start donating surplus food.</p>
+<div class="grid two">
+<div><label>Full name</label><input id="regName" autocomplete="name"></div>
+<div><label>Email</label><input id="regEmail" type="email" autocomplete="email"></div>
+<div><label>Mobile number</label><input id="regPhone" placeholder="9876543210" inputmode="numeric" autocomplete="tel"></div>
+<div><label>Password</label><input id="regPassword" type="password" minlength="6" autocomplete="new-password"></div>
+</div>
+<button class="btn" style="margin-top:16px" onclick="registerDonor()">✅ Create Donor Account</button>
+<p id="regMsg"></p>
+<p class="muted">Already registered? <a href="#" onclick="showLogin();return false;">Back to Login</a></p>
+</section>
+<main id="app" class="hidden"><div class="grid"><div class="stat"><b id="count">0</b><span>My donations</span></div><div class="stat"><b id="kg">0</b><span>Total kg</span></div><div class="stat"><b id="active">0</b><span>Active</span></div><div class="stat"><b id="delivered">0</b><span>Delivered</span></div></div>
+<div class="card"><h2>➕ Donate Food</h2><p class="muted">Select the food, then choose a registered recipient who currently needs that food.</p><div class="grid two"><div><label>Food type</label><select id="category" onchange="loadRecipientOptions()"><option>rice</option><option>wheat</option><option>arhar dal</option><option>rajma</option><option>vegetable</option></select></div><div><label>Recipient needing this food</label><select id="recipient" onchange="showSelectedRecipient()"><option value="">Loading recipients…</option></select><small id="recipientNeed" class="muted">Only recipients with an active need will appear.</small></div><div><label>Quantity (kg)</label><input id="qty" type="number" min="0.1" step="0.1" value="20" oninput="showSelectedRecipient()"></div><div><label>Expires in (minutes)</label><input id="expires" type="number" min="15" value="180"></div><div><label>Pickup phone</label><input id="phone"></div><div><label>Pickup latitude</label><input id="lat" type="number" step="any" value="26.9124"></div><div><label>Pickup longitude</label><input id="lng" type="number" step="any" value="75.7873"></div></div><button class="btn" onclick="donate()">Submit Donation</button><p id="donateMsg"></p></div>
+<div class="card"><h2>🔐 Pickup Approval</h2><p class="muted">When your selected driver reaches you, enter the 6-digit code shown on the Driver website.</p><div class="row"><div><label>6-digit pickup code</label><input id="pickupCode" inputmode="numeric" maxlength="6" placeholder="123456"></div><div style="align-self:end"><button class="btn" onclick="lookupCode()">Verify Code</button></div></div><div id="pickupResult"></div></div>
+<div class="card"><div class="row"><h2>📦 My Live Donations</h2><span class="muted">Updates every 3 seconds</span></div><div id="list" class="list"></div></div>
+<div class="card"><h2>🗺️ Live Driver Tracking</h2><p id="trackingText" class="muted">Select Track Driver on an active donation.</p><div id="map" class="map"></div></div>
+<div class="card"><h2>🚨 Open Emergency Food Needs</h2><div id="needs" class="list"></div></div>
+</main></div>
+<script>
+let user=null;
+let map=null;
+let driverMarker=null;
+let trackTimer=null;
+let recipientCache=[];
+const $=(id)=>document.getElementById(id);
+async function api(url,opt={}){const r=await fetch(url,opt);let j;try{j=await r.json()}catch(e){throw Error('Server returned an invalid response')}if(!r.ok)throw Error(j.detail||'Request failed');return j}
+function showRegistration(){
+  $('login').classList.add('hidden');
+  $('register').classList.remove('hidden');
+  $('loginMsg').textContent='';
+}
+function showLogin(){
+  $('register').classList.add('hidden');
+  $('login').classList.remove('hidden');
+  $('regMsg').textContent='';
+}
+async function loginDonor(){
+  const msg=$('loginMsg');
+  try{
+    const email=$('loginEmail').value.trim().toLowerCase();
+    const password=$('loginPassword').value;
+    if(!email||!password) throw Error('Please enter email and password.');
+    const logged=await api('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+    if(logged.role!=='donor') throw Error('This account is not a donor account.');
+    user=logged;
+    sessionStorage.setItem('anndataDonorSession',JSON.stringify(user));
+    $('login').classList.add('hidden');
+    $('register').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    $('who').textContent=user.name||'';
+    initMap(); refresh(); loadRecipientOptions(); handlePickupLink();
+  }catch(e){msg.className='error';msg.textContent='❌ '+e.message;}
+}
+async function registerDonor(){
+  const msg=$('regMsg');
+  try{
+    const name=$('regName').value.trim(),email=$('regEmail').value.trim(),phone=$('regPhone').value.trim(),password=$('regPassword').value;
+    if(!name||!email||!phone||!password) throw Error('Please fill name, email, mobile number and password.');
+    if(password.length<6) throw Error('Password must be at least 6 characters.');
+    msg.className='muted'; msg.textContent='Creating account…';
+    const created=await api('/auth/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password,role:'donor',phone})});
+    user=created;
+    sessionStorage.setItem('anndataDonorSession',JSON.stringify(user));
+    $('login').classList.add('hidden'); $('register').classList.add('hidden'); $('app').classList.remove('hidden');
+    $('who').textContent=user.name||''; initMap(); refresh(); loadRecipientOptions();
+    msg.className='ok'; msg.textContent='✅ Registration complete. Your donor workspace is ready.';
+  }catch(e){msg.className='error';msg.textContent='❌ '+e.message;}
+}
+function initMap(){if(map)return;map=L.map('map').setView([26.9124,75.7873],12);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(map)}
+async function donate() {
+  try {
+    const category = $('category').value;
+    const recipientId = Number($('recipient').value);
+    if (!recipientId) throw Error('Please select a recipient who needs ' + category + '.');
+    const r = await api('/donations', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({donor_name:user.name,description:category,quantity_kg:Number($('qty').value),lat:Number($('lat').value),lng:Number($('lng').value),expires_in_minutes:Number($('expires').value),category,recipient_id:recipientId,donor_phone:$('phone').value||null,donor_email:user.email})});
+    $('donateMsg').className = 'ok';
+    $('donateMsg').textContent = '✅ Donation #' + r.id + ' posted to ' + (r.recipient || 'selected recipient') + '.';
+    loadRecipientOptions(); refresh();
+  } catch(e) { $('donateMsg').className='error'; $('donateMsg').textContent=e.message; }
+}
+
+function badge(s){return '<span class="badge '+s+'">'+String(s).replace('_',' ')+'</span>';}
+
+async function loadRecipientOptions(){
+  try{
+    const category=$('category').value;
+    const current=Number($('recipient').value||0);
+    recipientCache=await api('/recipients');
+    const eligible=recipientCache.filter(r=>Number(r.food_needs?.[category]||0)>0);
+    $('recipient').innerHTML=eligible.length?'<option value="">Select recipient</option>'+eligible.map(r=>`<option value="${r.id}">${r.name} — needs ${Number(r.food_needs[category]).toFixed(1)} kg</option>`).join(''):'<option value="">No registered recipient currently needs '+category+'</option>';
+    if(eligible.some(r=>r.id===current)) $('recipient').value=String(current);
+    showSelectedRecipient();
+  }catch(e){$('recipient').innerHTML='<option value="">Could not load recipients</option>';}
+}
+
+function showSelectedRecipient(){
+  const id=Number($('recipient')?.value||0), category=$('category')?.value, qty=Number($('qty')?.value||0);
+  const r=recipientCache.find(x=>x.id===id);
+  if(!r){$('recipientNeed').textContent='Only recipients with an active need will appear.';return;}
+  const need=Number(r.food_needs?.[category]||0);
+  $('recipientNeed').textContent=`${r.name} needs ${need.toFixed(1)} kg of ${category}. You are donating ${qty.toFixed(1)} kg.`;
+}
+
+async function claimTrack(id){
+  clearInterval(trackTimer);
+  async function pull(){
+    try{
+      const t=await api('/donations/'+id+'/tracking');
+      if(!t.tracking_available){$('trackingText').textContent='Driver has not claimed this pickup yet.';return;}
+      $('trackingText').textContent='🟢 '+t.driver+' · '+(t.location_updated_at?'Live GPS updated':'Waiting for first GPS update');
+      if(t.driver_lat && map){const pos=[t.driver_lat,t.driver_lng];if(!driverMarker) driverMarker=L.marker(pos).addTo(map).bindPopup('🚚 '+t.driver); else driverMarker.setLatLng(pos);map.setView(pos,13);}
+    }catch(e){$('trackingText').textContent=e.message;}
+  }
+  pull(); trackTimer=setInterval(pull,3000);
+}
+
+async function refresh(){
+  if(!user)return;
+  try{
+    const d=await api('/dashboard/summary?email='+encodeURIComponent(user.email));
+    const rows=d.donations||[];
+    $('count').textContent=rows.length;
+    $('kg').textContent=rows.reduce((a,x)=>a+Number(x.quantity_kg||0),0).toFixed(1);
+    $('active').textContent=rows.filter(x=>['matched','picked_up','in_transit'].includes(x.status)).length;
+    $('delivered').textContent=rows.filter(x=>x.status==='delivered').length;
+    $('list').innerHTML=rows.length?rows.map(x=>`<div class="card"><div class="row"><div><b>#${x.id} · ${x.category||x.description}</b><br>${x.quantity_kg} kg · Recipient: ${x.recipient||'Waiting for matching need'}<br>Driver: ${x.driver||'Waiting for driver'}</div>${badge(x.status)}</div>${x.driver&&['matched','picked_up','in_transit'].includes(x.status)?`<button class="btn btn-sm" onclick="claimTrack(${x.id})">🗺️ Track Driver</button>`:''}</div>`).join(''):'<div class="muted">No donations yet.</div>';
+    const needs=await api('/features/emergency');
+    $('needs').innerHTML=needs.filter(x=>x.status==='open').map(x=>`<div class="card"><b>🚨 ${x.food_type} · ${x.quantity_kg} kg</b><br>${x.shelter} · ${x.people} people · ${x.urgency}</div>`).join('')||'<div class="muted">No open emergency needs.</div>';
+  }catch(e){$('list').innerHTML='<div class="error">'+e.message+'</div>';}
+}
+
+async function lookupCode(){try{const code=$('pickupCode').value.trim();const r=await api('/features/pickup-code/lookup?code='+encodeURIComponent(code));$('pickupResult').innerHTML=`<div class="alert"><b>Pickup found</b><br>${r.quantity_kg} kg ${r.food} · Driver: ${r.driver||'-'} · Recipient: ${r.recipient||'-'}<br><button class="btn" onclick="approveCode('${r.code}')">✅ Approve & mark picked up</button></div>`}catch(e){$('pickupResult').innerHTML='<div class="error">'+e.message+'</div>';}}
+async function approveCode(code){try{const r=await api('/features/pickup-code/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});$('pickupResult').innerHTML='<div class="ok">✅ '+r.message+'</div>';refresh()}catch(e){$('pickupResult').innerHTML='<div class="error">'+e.message+'</div>';}}
+
+setInterval(refresh,3000);
+setInterval(loadRecipientOptions,3000);
+
+// Always open the Donor website on the login screen.
+// Old builds could keep a donor profile in browser storage and reopen it automatically.
+localStorage.removeItem('anndataDonorUser');
+sessionStorage.removeItem('anndataDonorSession');
+user=null;
+$('login').classList.remove('hidden');
+$('register').classList.add('hidden');
+$('app').classList.add('hidden');
+$('who').textContent='';
+
+</script>
+<div id="google_translate_element" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden"></div>
+<script>
+window.googleTranslateReady=false;
+function googleTranslateElementInit(){
+  new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,hi,bn,gu,mr,pa,ta,te,kn,ml,or,as,ur,ne,sd,kok,mai,sa,doi,mni,ks,sat,brx',autoDisplay:false},'google_translate_element');
+  window.googleTranslateReady=true;
+  applySavedGoogleLanguage();
+}
+function applySavedGoogleLanguage(){
+  const lang=localStorage.getItem('preferredLanguage')||'en';
+  if(lang==='en') return;
+  const combo=document.querySelector('.goog-te-combo');
+  if(!combo){setTimeout(applySavedGoogleLanguage,300);return;}
+  combo.value=lang;
+  combo.dispatchEvent(new Event('change'));
+}
+function setPageLanguage(lang){
+  localStorage.setItem('preferredLanguage',lang);
+  document.documentElement.lang=lang;
+  if(lang==='en'){
+    const combo=document.querySelector('.goog-te-combo');
+    if(combo){combo.value='en';combo.dispatchEvent(new Event('change'));}
+    return;
+  }
+  applySavedGoogleLanguage();
+}
+</script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+</body></html>

@@ -1,0 +1,50 @@
+{
+  "krishna0104agarwal@gmail.com": {
+    "id": 1,
+    "name": "krishna",
+    "email": "krishna0104agarwal@gmail.com",
+    "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "role": "donor",
+    "phone": "7455082982",
+    "verified": true,
+    "registered_at": "2026-09-25T10:41:41.032978"
+  },
+  "saksham2601@gmail.com": {
+    "id": 2,
+    "name": "saksham",
+    "email": "saksham2601@gmail.com",
+    "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "role": "driver",
+    "phone": "7037645785",
+    "verified": true,
+    "registered_at": "2026-09-25T10:42:45.072502",
+    "profile_id": 1,
+    "lat": 26.9124,
+    "lng": 75.7873
+  },
+  "iteagarwal@gmail.com": {
+    "id": 3,
+    "name": "ite",
+    "email": "iteagarwal@gmail.com",
+    "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "role": "recipient",
+    "phone": "9352211281",
+    "verified": true,
+    "registered_at": "2026-09-25T10:43:44.673903",
+    "profile_id": 1,
+    "lat": 26.9124,
+    "lng": 75.7873,
+    "capacity_kg": 50.0,
+    "accepts_list": [
+      "arhar dal",
+      "rice"
+    ],
+    "food_needs": {
+      "rice": 5.0,
+      "wheat": 0.0,
+      "arhar dal": 7.0,
+      "rajma": 0.0,
+      "vegetable": 0.0
+    }
+  }
+}

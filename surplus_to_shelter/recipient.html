@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Recipient | AnnData</title><link rel="stylesheet" href="/site_shared.css"></head>
+<body><header><div><h1>🏠 Recipient Website</h1><small>Tell us what food you need and keep your quantities updated live</small></div><div id="who"></div></header>
+<div class="wrap">
+<section id="login" class="card login"><h2>Recipient Login</h2><label>Username / Email</label><input id="email" type="email"><label>Password</label><input id="password" type="password"><button class="btn" onclick="login()">Login</button><p id="loginMsg" class="error"></p><p class="muted">Not registered? <a href="/">Register on Company Website</a></p></section>
+<main id="app" class="hidden">
+<div class="grid"><div class="stat"><b id="capacity">0</b><span>Capacity left (kg)</span></div><div class="stat"><b id="received">0</b><span>Received (kg)</span></div><div class="stat"><b id="active">0</b><span>Incoming (kg)</span></div><div class="stat"><b id="delivered">0</b><span>Delivered (kg)</span></div></div>
+<div class="card"><h2>🍚 What food do you need?</h2><p class="muted">We start every selected food need at <b>20 kg</b>. Change the number anytime. Donor matching updates automatically.</p><div id="needs" class="grid two"></div><button class="btn" onclick="saveNeeds()">💾 Save Food Needs</button><p id="needMsg"></p></div>
+<div class="card"><div class="row"><h2>📦 My Food Movement</h2><span class="muted">Live refresh every 3 seconds</span></div><div id="rows" class="list"></div></div>
+<div class="card"><h2>🚨 Request Emergency Food</h2><div class="grid two"><div><label>Food required</label><select id="food"><option>rice</option><option>wheat</option><option>arhar dal</option><option>rajma</option><option>vegetable</option></select></div><div><label>Quantity required (kg)</label><input id="qty" type="number" min="1" value="20"></div><div><label>People to feed</label><input id="people" type="number" min="1" value="10"></div><div><label>Urgency</label><select id="urgency"><option value="critical">Critical</option><option value="high">High</option><option value="normal">Normal</option></select></div></div><label>Note</label><textarea id="note"></textarea><button class="btn" onclick="requestFood()">Raise Emergency Request</button><p id="msg"></p></div>
+<div class="card"><h2>📋 My Emergency Requests</h2><div id="requests" class="list"></div></div>
+</main></div>
+<script>
+const FOODS=['rice','wheat','arhar dal','rajma','vegetable'];let user=null;const $=id=>document.getElementById(id);
+async function api(url,opt={}){const r=await fetch(url,opt);let j;try{j=await r.json()}catch(e){throw Error('Server returned an invalid response')};if(!r.ok)throw Error(j.detail||'Request failed');return j}
+async function login(){try{user=await api('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('email').value.trim(),password:$('password').value})});if(user.role!=='recipient')throw Error('This account is not a recipient account');$('login').classList.add('hidden');$('app').classList.remove('hidden');$('who').textContent=user.name;refresh()}catch(e){$('loginMsg').textContent=e.message}}
+function renderNeeds(needs){$('needs').innerHTML=FOODS.map(f=>`<div><label style="text-transform:capitalize">${f}</label><input class="need-input" data-food="${f}" type="number" min="0" step="1" value="${Number(needs?.[f]??0)}"><small class="muted">kg needed</small></div>`).join('')}
+async function saveNeeds(){const needs={};document.querySelectorAll('.need-input').forEach(x=>needs[x.dataset.food]=Number(x.value)||0);try{await api('/recipients/'+user.profile_id+'/needs',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({needs})});$('needMsg').className='ok';$('needMsg').textContent='✅ Food needs updated. Donors will see the new requirements in real time.';setTimeout(()=>$('needMsg').textContent='',2500);refresh()}catch(e){$('needMsg').className='error';$('needMsg').textContent=e.message}}
+function badge(s){return '<span class="badge '+s+'">'+String(s).replace('_',' ')+'</span>'}
+async function refresh(){if(!user)return;try{const d=await api('/dashboard/summary?email='+encodeURIComponent(user.email));const r=d.recipient||{};$('capacity').textContent=Number(r.capacity_kg||0).toFixed(1);$('received').textContent=Number(r.received_kg||0).toFixed(1);$('active').textContent=Number(r.active_kg||0).toFixed(1);$('delivered').textContent=Number(r.delivered_kg||0).toFixed(1);renderNeeds(r.food_needs||{});const rows=d.donations||[];$('rows').innerHTML=rows.length?rows.map(x=>`<div class="card"><b>#${x.id} · ${x.category||x.description}</b><br>${x.quantity_kg} kg · Donor: ${x.donor_name} · Driver: ${x.driver||'Waiting for driver'}<br>${badge(x.status)}</div>`).join(''):'<div class="muted">No food movement yet.</div>';const req=(d.emergency_requests||[]);$('requests').innerHTML=req.length?req.map(x=>`<div class="card"><b>#${x.id} · ${x.food_type}</b><br>${x.quantity_kg} kg for ${x.people} people · ${x.urgency}<br>${badge(x.status)}</div>`).join(''):'<div class="muted">No emergency requests.</div>'}catch(e){$('rows').innerHTML='<div class="error">'+e.message+'</div>'}}
+async function requestFood(){try{const r=await api('/features/emergency',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({shelter_id:user.profile_id,food_type:$('food').value,quantity_kg:Number($('qty').value),people:Number($('people').value),urgency:$('urgency').value,note:$('note').value,requester_email:user.email})});$('msg').className='ok';$('msg').textContent='✅ Emergency request #'+r.id+' is now visible to donors.';refresh()}catch(e){$('msg').className='error';$('msg').textContent=e.message}}
+setInterval(refresh,3000);
+</script>
+<div id="google_translate_element" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden"></div>
+<script>
+window.googleTranslateReady=false;
+function googleTranslateElementInit(){
+  new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,hi,bn,gu,mr,pa,ta,te,kn,ml,or,as,ur,ne,sd,kok,mai,sa,doi,mni,ks,sat,brx',autoDisplay:false},'google_translate_element');
+  window.googleTranslateReady=true;
+  applySavedGoogleLanguage();
+}
+function applySavedGoogleLanguage(){
+  const lang=localStorage.getItem('preferredLanguage')||'en';
+  if(lang==='en') return;
+  const combo=document.querySelector('.goog-te-combo');
+  if(!combo){setTimeout(applySavedGoogleLanguage,300);return;}
+  combo.value=lang;
+  combo.dispatchEvent(new Event('change'));
+}
+function setPageLanguage(lang){
+  localStorage.setItem('preferredLanguage',lang);
+  document.documentElement.lang=lang;
+  if(lang==='en'){
+    const combo=document.querySelector('.goog-te-combo');
+    if(combo){combo.value='en';combo.dispatchEvent(new Event('change'));}
+    return;
+  }
+  applySavedGoogleLanguage();
+}
+</script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+</body></html>

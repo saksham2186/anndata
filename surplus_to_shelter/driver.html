@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Driver | AnnData</title><link rel="stylesheet" href="/site_shared.css"><script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<style>.fresh-check{display:flex;gap:10px;align-items:flex-start;background:#f5fbf7;border:1px solid #cfe9d7;padding:12px;border-radius:12px;margin:10px 0}.fresh-check input{width:20px;height:20px;margin-top:2px}.journey-note{padding:10px 12px;border-radius:12px;background:#fff8ee;border:1px solid #f2dfc1;margin-top:10px}.btn:disabled{opacity:.55;cursor:not-allowed}</style>
+</head>
+<body><header><div><h1>🚚 Delivery Driver Website</h1><small>See every posted donation, choose a pickup, get donor approval, verify freshness and complete delivery</small></div><div id="who"></div></header>
+<div class="wrap">
+<section id="login" class="card login"><h2>Driver Login</h2><label>Username / Email</label><input id="email" type="email"><label>Password</label><input id="password" type="password"><button class="btn" onclick="login()">Login</button><p id="loginMsg" class="error"></p><p class="muted">Not registered? <a href="/">Register on Main Website</a></p></section>
+<main id="app" class="hidden">
+<div class="grid"><div class="stat"><b id="posted">0</b><span>Posted donations</span></div><div class="stat"><b id="available">0</b><span>Available to choose</span></div><div class="stat"><b id="mine">0</b><span>My pickups</span></div><div class="stat"><b id="delivered">0</b><span>Delivered</span></div></div>
+<div class="card"><div class="row"><div><h2>📦 All Posted Donations</h2><p class="muted">Choose an unclaimed matched donation yourself. The driver cannot start delivery until donor approval and freshness verification are complete.</p></div><button class="btn green" onclick="startGPS()">📍 Start Live GPS</button></div><p id="gps" class="muted"></p><div id="jobs" class="list"></div></div>
+</main></div>
+<script>
+let user=null,gpsWatch=null;const $=id=>document.getElementById(id);
+async function api(url,opt={}){const r=await fetch(url,opt);let j;try{j=await r.json()}catch(e){throw Error('Server returned an invalid response')};if(!r.ok)throw Error(j.detail||'Request failed');return j}
+async function login(){try{user=await api('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('email').value.trim(),password:$('password').value})});if(user.role!=='driver')throw Error('This account is not a driver account');$('login').classList.add('hidden');$('app').classList.remove('hidden');$('who').textContent=user.name;refresh()}catch(e){$('loginMsg').textContent=e.message}}
+function badge(s){return '<span class="badge '+s+'">'+String(s).replace('_',' ')+'</span>'}
+function toast(m,t='success'){const x=document.createElement('div');x.className='card '+(t==='error'?'error':'');x.style='position:fixed;right:18px;bottom:18px;z-index:99;max-width:360px';x.textContent=(t==='error'?'⚠️ ':'✅ ')+m;document.body.appendChild(x);setTimeout(()=>x.remove(),2600)}
+async function claim(id){try{await api('/donations/'+id+'/claim?driver_id='+encodeURIComponent(user.profile_id),{method:'POST'});toast('Pickup claimed successfully. Generate the QR for donor approval.');refresh()}catch(e){toast(e.message,'error')}}
+async function makeQR(id){try{const r=await api('/features/qr/'+id);const box=$('qr'+id);box.innerHTML='';new QRCode(box,{text:r.scan_url,width:120,height:120});$('code'+id).textContent=r.code;toast('Pickup QR generated. Show it to the donor for approval.')}catch(e){toast(e.message,'error')}}
+async function copyCode(id,btn){const code=$('code'+id).textContent;try{await navigator.clipboard.writeText(code)}catch(e){const t=document.createElement('textarea');t.value=code;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove()}btn.textContent='✅ Copied';setTimeout(()=>btn.textContent='📋 Copy code',1200)}
+async function startDelivery(id){const box=document.getElementById('fresh'+id);const check=document.getElementById('freshCheck'+id);if(!check.checked){toast('Please tick the freshness/adulteration-kit confirmation first.','error');return}try{await api('/features/delivery-start/'+id+'?driver_id='+encodeURIComponent(user.profile_id)+'&freshness_confirmed=true',{method:'POST'});toast('Freshness verified. Delivery started!');refresh()}catch(e){toast(e.message,'error')}}
+async function deliver(id){try{await api('/donations/'+id+'/deliver',{method:'POST'});toast('Delivery completed — nice work!');refresh()}catch(e){toast(e.message,'error')}}
+async function refresh(){if(!user)return;try{const all=await api('/donations');const rows=all.filter(d=>d.status!=='cancelled');$('posted').textContent=rows.length;$('available').textContent=rows.filter(d=>d.status==='matched'&&!d.driver_id).length;$('mine').textContent=rows.filter(d=>d.driver_id===user.profile_id).length;$('delivered').textContent=rows.filter(d=>d.driver_id===user.profile_id&&d.status==='delivered').length;
+$('jobs').innerHTML=rows.length?rows.map(d=>{const mine=d.driver_id===user.profile_id;const canClaim=d.status==='matched'&&!d.driver_id;let action='';let extra='';
+if(canClaim) action=`<button class="btn btn-orange btn-sm" onclick="claim(${d.id})">🚚 Choose This Pickup</button>`;
+else if(mine&&d.status==='matched'){action=`<button class="btn btn-orange btn-sm" onclick="makeQR(${d.id})">📱 Generate Pickup QR</button>`;extra=`<div class="driver-qr"><div id="qr${d.id}" class="qr-code"></div><div><b>📱 Show donor for approval</b><div id="code${d.id}" class="code">------</div><button class="btn btn-sm" onclick="copyCode(${d.id},this)">📋 Copy code</button><p class="muted">Donor must approve the pickup first. After approval the status becomes <b>picked up</b>.</p></div></div>`;}
+else if(mine&&d.status==='picked_up'){action=`<button class="btn btn-orange btn-sm" onclick="startDelivery(${d.id})">🚚 Confirm Freshness & Start Delivery</button>`;extra=`<div class="fresh-check"><input id="freshCheck${d.id}" type="checkbox"><label for="freshCheck${d.id}"><b>Food freshness check completed</b><br><span class="muted">I checked the food with our adulteration/freshness instant kit and confirmed the parcel is suitable for delivery.</span></label></div><div class="journey-note">🔐 Donor approval received. Complete the freshness check above to start the ride.</div>`;}
+else if(mine&&d.status==='in_transit'){action=`<button class="btn btn-orange btn-sm" onclick="deliver(${d.id})">✅ Mark Delivered</button>`;extra=`<div class="journey-note">🚚 <b>Delivery in progress.</b> Live GPS can be shared while you travel. Mark delivered after handing the food to the recipient.</div>`;}
+const owner=d.driver&&!mine?`<span class="muted">Chosen by ${d.driver}</span>`:'';return `<div class="card"><div class="row"><div><h3>#${d.id} · ${d.category||d.description}</h3><p>${d.quantity_kg} kg · Donor: ${d.donor_name}<br>Recipient: ${d.recipient||'Waiting for recipient need'}<br>${owner}</p></div>${badge(d.status)}</div><div style="display:flex;gap:10px;flex-wrap:wrap">${action}</div>${extra}</div>`}).join(''):'<div class="card">No donations posted yet.</div>'}catch(e){$('jobs').innerHTML='<div class="card error">'+e.message+'</div>'}}
+function startGPS(){if(!navigator.geolocation){$('gps').textContent='Geolocation is not available in this browser.';return}if(gpsWatch!==null)navigator.geolocation.clearWatch(gpsWatch);gpsWatch=navigator.geolocation.watchPosition(async p=>{try{await api('/drivers/'+user.profile_id+'/location',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:p.coords.latitude,lng:p.coords.longitude})});$('gps').textContent='🟢 Live GPS: '+p.coords.latitude.toFixed(5)+', '+p.coords.longitude.toFixed(5)}catch(e){$('gps').textContent=e.message}},()=>{$('gps').textContent='GPS permission denied. Please allow location access.'},{enableHighAccuracy:true,maximumAge:2000,timeout:10000})}
+setInterval(refresh,3000);
+</script>
+<div id="google_translate_element" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden"></div>
+<script>
+window.googleTranslateReady=false;
+function googleTranslateElementInit(){
+  new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,hi,bn,gu,mr,pa,ta,te,kn,ml,or,as,ur,ne,sd,kok,mai,sa,doi,mni,ks,sat,brx',autoDisplay:false},'google_translate_element');
+  window.googleTranslateReady=true;
+  applySavedGoogleLanguage();
+}
+function applySavedGoogleLanguage(){
+  const lang=localStorage.getItem('preferredLanguage')||'en';
+  if(lang==='en') return;
+  const combo=document.querySelector('.goog-te-combo');
+  if(!combo){setTimeout(applySavedGoogleLanguage,300);return;}
+  combo.value=lang;
+  combo.dispatchEvent(new Event('change'));
+}
+function setPageLanguage(lang){
+  localStorage.setItem('preferredLanguage',lang);
+  document.documentElement.lang=lang;
+  if(lang==='en'){
+    const combo=document.querySelector('.goog-te-combo');
+    if(combo){combo.value='en';combo.dispatchEvent(new Event('change'));}
+    return;
+  }
+  applySavedGoogleLanguage();
+}
+</script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+</body></html>

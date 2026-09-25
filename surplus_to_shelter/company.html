@@ -1,0 +1,56 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Company Command Center | AnnData</title><link rel="stylesheet" href="/site_shared.css"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><style>.person-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.person{padding:12px;border:1px solid #eee1cd;border-radius:14px;background:#fff}.person b{display:block}.person small{color:#777}.section-title{display:flex;justify-content:space-between;align-items:center;gap:10px}@media(max-width:800px){.person-grid{grid-template-columns:1fr}}</style></head>
+<body><header><div><h1>🏢 Company Command Center</h1><small>Live operational monitoring — registration is not available for Company</small></div><div id="who"></div></header><div class="wrap">
+<section id="login" class="card login"><h2>Company Login</h2><p class="muted">Enter your authorised Company username and password.</p><label>Username</label><input id="email" autocomplete="username"><label>Password</label><input id="password" type="password" autocomplete="current-password"><button class="btn" onclick="login()">Login</button><p id="loginMsg" class="error"></p></section>
+<main id="app" class="hidden">
+<div id="stats" class="grid"></div>
+<div class="card"><div class="section-title"><h2>🗺️ Live Operations</h2><span class="muted">Auto refresh every 3 seconds</span></div><div id="map" class="map"></div></div>
+<div class="card"><div class="section-title"><h2>👥 Registered People</h2><span class="muted">Live registry — Donors, Drivers and Recipients</span></div><div class="grid two"><div><h3>🍱 Donors</h3><div id="donors" class="person-grid"></div></div><div><h3>🚚 Drivers</h3><div id="drivers" class="person-grid"></div></div></div><div style="margin-top:18px"><h3>🏠 Recipients</h3><div id="recipients" class="person-grid"></div></div></div>
+<div class="card"><h2>🏠 Recipient Selector</h2><label>Select recipient organization</label><select id="recipientSelect" onchange="loadRecipient()"></select><div id="recipientView" style="margin-top:15px"></div></div>
+<div class="card"><h2>📦 All Food Movement</h2><div id="all" class="list"></div></div>
+<div class="grid two"><div class="card"><h2>🚨 Emergency Needs</h2><div id="emergency" class="list"></div></div><div class="card"><h2>⏳ Expiry Alerts</h2><div id="expiry" class="list"></div></div></div>
+</main></div>
+<script>
+let user=null,map=null,layers=[];const $=id=>document.getElementById(id);
+async function api(u,opt={}){const r=await fetch(u,opt);let j;try{j=await r.json()}catch(e){throw Error('Invalid server response')};if(!r.ok)throw Error(j.detail||'Request failed');return j}
+async function login(){try{user=await api('/company/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('email').value.trim(),password:$('password').value})});$('login').classList.add('hidden');$('app').classList.remove('hidden');$('who').textContent=user.name;initMap();refresh()}catch(e){$('loginMsg').textContent=e.message}}
+function initMap(){if(map)return;map=L.map('map').setView([26.9124,75.7873],12);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(map)}
+function badge(s){return '<span class="badge '+s+'">'+String(s).replace('_',' ')+'</span>'}
+function personCard(x,role){return '<div class="person"><b>'+((role==='donor'?'🍱 ':role==='driver'?'🚚 ':'🏠 ')+(x.name||'-'))+'</b><small>'+((x.email||'No email'))+'<br>'+((x.phone||'No phone'))+'</small></div>'}
+async function refresh(){if(!user)return;try{const d=await api('/company/summary');const reg=d.registered;$('stats').innerHTML='<div class="stat"><b>'+reg.total+'</b><span>Registered users</span></div><div class="stat"><b>'+reg.donors.length+'</b><span>Donors</span></div><div class="stat"><b>'+reg.drivers.length+'</b><span>Drivers</span></div><div class="stat"><b>'+reg.recipients.length+'</b><span>Recipients</span></div><div class="stat"><b>'+d.donations.length+'</b><span>Total donations</span></div>';
+$('donors').innerHTML=reg.donors.length?reg.donors.map(x=>personCard(x,'donor')).join(''):'<span class="muted">No registered donors.</span>';$('drivers').innerHTML=reg.drivers.length?reg.drivers.map(x=>personCard(x,'driver')).join(''):'<span class="muted">No registered drivers.</span>';$('recipients').innerHTML=reg.recipients.length?reg.recipients.map(x=>personCard(x,'recipient')).join(''):'<span class="muted">No registered recipients.</span>';
+const recs=d.recipients_live||[];$('recipientSelect').innerHTML=recs.map(r=>'<option value="'+r.id+'">'+r.name+'</option>').join('')||'<option>No recipients</option>';await loadRecipient();const rows=d.donations||[];$('all').innerHTML=rows.map(x=>'<div class="item"><strong>#'+x.id+' · '+x.description+'</strong><br>'+x.quantity_kg+' kg · '+x.donor_name+' → '+(x.recipient||'-')+' · Driver: '+(x.driver||'-')+'<br>'+badge(x.status)+(x.freshness_checked?' · ✅ Freshness checked':'')+'</div>').join('')||'<div class="muted">No food movement.</div>';
+const em=d.emergency_requests||[];$('emergency').innerHTML=em.map(x=>'<div class="item"><strong>🚨 '+x.shelter+' · '+x.food_type+'</strong><br>'+x.quantity_kg+' kg · '+x.people+' people · '+x.urgency+' · '+x.status+'</div>').join('')||'<div class="muted">No emergency requests.</div>';const ex=await api('/features/expiry-alerts');$('expiry').innerHTML=ex.map(x=>'<div class="item"><strong>#'+x.donation_id+' · '+x.food+'</strong><br>'+x.quantity_kg+' kg · '+x.minutes_left+' min left · '+x.severity+'</div>').join('')||'<div class="muted">No expiry alerts.</div>';await refreshMap()}catch(e){$('loginMsg').textContent=e.message}}
+async function loadRecipient(){const id=$('recipientSelect').value;if(!id)return;const r=await api('/dashboard/recipient/'+id);const needs=r.recipient.food_needs||{};const needHtml=Object.entries(needs).map(([k,v])=>'<span class="badge '+(v>0?'matched':'unmatched')+'" style="margin:3px">'+k+': '+v+' kg</span>').join('');$('recipientView').innerHTML='<div class="grid"><div class="stat"><b>'+r.recipient.capacity_kg+'</b><span>Capacity left kg</span></div><div class="stat"><b>'+r.received_kg+'</b><span>Received kg</span></div><div class="stat"><b>'+r.active_kg+'</b><span>Incoming kg</span></div><div class="stat"><b>'+r.delivered_kg+'</b><span>Delivered kg</span></div></div><div class="item"><strong>'+r.recipient.name+'</strong><br>Current food needs:<div style="margin-top:8px">'+needHtml+'</div><br>Emergency requests: '+r.emergency_requests.length+'</div>'}
+async function refreshMap(){if(!map)return;layers.forEach(x=>map.removeLayer(x));layers=[];const [ds,rs,drs]=await Promise.all([api('/donations'),api('/recipients'),api('/drivers')]);rs.forEach(r=>layers.push(L.marker([r.lat,r.lng]).addTo(map).bindPopup('🏠 '+r.name)));drs.forEach(r=>layers.push(L.marker([r.lat,r.lng]).addTo(map).bindPopup('🚚 '+r.name+' · '+(r.available?'Available':'On delivery'))));ds.filter(d=>['matched','picked_up','in_transit'].includes(d.status)).forEach(d=>layers.push(L.circleMarker([d.lat,d.lng],{radius:8}).addTo(map).bindPopup('🍱 #'+d.id+' '+d.description+'<br>Status: '+d.status)));}
+setInterval(refresh,3000);
+</script>
+<div id="google_translate_element" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden"></div>
+<script>
+window.googleTranslateReady=false;
+function googleTranslateElementInit(){
+  new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,hi,bn,gu,mr,pa,ta,te,kn,ml,or,as,ur,ne,sd,kok,mai,sa,doi,mni,ks,sat,brx',autoDisplay:false},'google_translate_element');
+  window.googleTranslateReady=true;
+  applySavedGoogleLanguage();
+}
+function applySavedGoogleLanguage(){
+  const lang=localStorage.getItem('preferredLanguage')||'en';
+  if(lang==='en') return;
+  const combo=document.querySelector('.goog-te-combo');
+  if(!combo){setTimeout(applySavedGoogleLanguage,300);return;}
+  combo.value=lang;
+  combo.dispatchEvent(new Event('change'));
+}
+function setPageLanguage(lang){
+  localStorage.setItem('preferredLanguage',lang);
+  document.documentElement.lang=lang;
+  if(lang==='en'){
+    const combo=document.querySelector('.goog-te-combo');
+    if(combo){combo.value='en';combo.dispatchEvent(new Event('change'));}
+    return;
+  }
+  applySavedGoogleLanguage();
+}
+</script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+</body></html>
